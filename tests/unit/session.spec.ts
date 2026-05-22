@@ -18,6 +18,7 @@ class FakeInnerSession implements PiInnerSession {
   nextDeltaInput = 0;
   nextDeltaOutput = 0;
   disposed = false;
+  aborted = false;
   abortCalls = 0;
   promptCalls: string[] = [];
   private cumulative: UsageSnapshot = { cost: 0, inputTokens: 0, outputTokens: 0 };
@@ -51,6 +52,7 @@ class FakeInnerSession implements PiInnerSession {
   }
 
   async abort(): Promise<void> {
+    this.aborted = true;
     this.abortCalls += 1;
   }
 
@@ -286,6 +288,45 @@ describe('PiSession.prompt (fake inner session)', () => {
     expect(result.finishReason).toBe('error');
     expect(result.errorMessage).toMatch(/aborted/);
     expect(fake.abortCalls).toBe(1);
+    await session.close();
+  });
+
+  it('short-circuits the second prompt with cost_cap once cumulative cost has reached the cap', async () => {
+    const fake = new FakeInnerSession();
+    const session = new PiSession({ ...baseOpts, maxCostUsd: 0.001 }, fake);
+    // First turn drives cumulative cost to 0.002 (above cap). The turn itself
+    // does not trip the cap mid-turn because the contract only triggers the
+    // pre-flight check on the NEXT prompt for this scenario; we want the second
+    // prompt to short-circuit without ever calling inner.prompt.
+    scriptTurn(fake, ['hi'], 0.002, 1, 1);
+    const r1 = await session.prompt('one');
+    // First turn does fire the mid-turn cap because cost >= cap at message_end.
+    // That's fine for this test — we only care that the SECOND call is the
+    // pre-flight short-circuit. Drain the fake's promptCalls so we can assert
+    // length precisely below.
+    expect(r1.cumulativeCostUsd).toBeCloseTo(0.002, 10);
+    const callsBefore = fake.promptCalls.length;
+    const r2 = await session.prompt('two');
+    expect(r2.finishReason).toBe('cost_cap');
+    expect(r2.errorMessage).toMatch(/cap/);
+    // Pre-flight: inner.prompt must NOT have been called for the second call.
+    expect(fake.promptCalls.length).toBe(callsBefore);
+    await session.close();
+  });
+
+  it('aborts mid-turn and resolves with cost_cap when message_end pushes cost past the cap', async () => {
+    const fake = new FakeInnerSession();
+    const session = new PiSession({ ...baseOpts, maxCostUsd: 0.0005 }, fake);
+    // Tape: streams "par" + "tial" deltas, then message_end reports cumulative
+    // cost of 0.001 (above the 0.0005 cap). turn_end would normally follow but
+    // PiSession should already have finalized the turn as cost_cap.
+    scriptTurn(fake, ['par', 'tial'], 0.001, 3, 2);
+    const result = await session.prompt('hi');
+    expect(result.finishReason).toBe('cost_cap');
+    expect(result.errorMessage).toMatch(/cap/);
+    expect(result.text).toBe('partial');
+    expect(fake.abortCalls).toBe(1);
+    expect(fake.aborted).toBe(true);
     await session.close();
   });
 

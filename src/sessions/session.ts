@@ -1,13 +1,7 @@
-import fs from 'node:fs/promises';
-import {
-  type AgentSession,
-  type AgentSessionEvent,
-  ModelRegistry,
-  SessionManager,
-  SettingsManager,
-  createAgentSession,
-} from '@earendil-works/pi-coding-agent';
+import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 import { parseModelString } from './parseModel.js';
+import { buildInnerSession } from './bootstrap.js';
+import { buildTerminalResult, capReachedMessage, validateMaxCostUsd } from './costGuard.js';
 import type {
   PiInnerSession,
   PiSessionOptions,
@@ -26,6 +20,8 @@ export type {
   UsageSnapshot,
 } from './types.js';
 
+type TerminalReason = 'completed' | 'error' | 'cost_cap';
+
 interface TurnState {
   text: string;
   onText?: (delta: string) => void;
@@ -33,47 +29,16 @@ interface TurnState {
   statsBefore: UsageSnapshot;
 }
 
-function adaptAgentSession(s: AgentSession): PiInnerSession {
-  return {
-    subscribe: (l) => s.subscribe(l),
-    prompt: (t) => s.prompt(t),
-    abort: () => s.abort(),
-    getUsageSnapshot: () => {
-      const stats = s.getSessionStats();
-      return { cost: stats.cost, inputTokens: stats.tokens.input, outputTokens: stats.tokens.output };
-    },
-    dispose: () => s.dispose(),
-  };
-}
-
 export class PiSession {
   static async create(opts: PiSessionOptions): Promise<PiSession> {
-    // Validate model BEFORE creating the agent dir so a bad string doesn't leak an empty dir.
-    const registry = ModelRegistry.create(opts.authStorage);
-    const { provider, modelId } = parseModelString(opts.model);
-    const model = registry.find(provider, modelId);
-    if (!model) {
-      throw new Error(`Model not found: provider=${JSON.stringify(provider)} id=${JSON.stringify(modelId)}`);
-    }
-    await fs.mkdir(opts.agentDir, { recursive: true });
-    const created = await createAgentSession({
-      cwd: opts.cwd,
-      agentDir: opts.agentDir,
-      authStorage: opts.authStorage,
-      modelRegistry: registry,
-      model,
-      ...(opts.thinkingLevel !== undefined ? { thinkingLevel: opts.thinkingLevel } : {}),
-      // In-memory settings so we never mutate the user's global pi settings.
-      settingsManager: SettingsManager.inMemory(),
-      // pi 0.74.1: SessionManager.create(cwd, agentDir)
-      sessionManager: SessionManager.create(opts.cwd, opts.agentDir),
-    });
-    return new PiSession(opts, adaptAgentSession(created.session));
+    const inner = await buildInnerSession(opts);
+    return new PiSession(opts, inner);
   }
 
   readonly id: string;
   readonly model: string;
   readonly cwd: string;
+  readonly maxCostUsd: number | undefined;
   private readonly inner: PiInnerSession;
   private readonly unsubscribe: () => void;
   private _cumulativeCostUsd = 0;
@@ -82,9 +47,11 @@ export class PiSession {
 
   /** Test/internal hook: construct from an already-built inner session. */
   constructor(opts: PiSessionOptions, inner: PiInnerSession) {
+    validateMaxCostUsd(opts.maxCostUsd);
     this.id = opts.id;
     this.model = opts.model;
     this.cwd = opts.cwd;
+    this.maxCostUsd = opts.maxCostUsd;
     this.inner = inner;
     this.unsubscribe = inner.subscribe((ev) => this.onEvent(ev));
   }
@@ -94,10 +61,14 @@ export class PiSession {
   }
 
   async prompt(text: string, opts?: PromptOptions): Promise<PromptResult> {
-    if (this.closed) return this.errorResult('session closed');
-    if (this.active !== null) return this.errorResult('another prompt is already in progress');
+    if (this.closed) return this.terminalResult('error', 'session closed');
+    if (this.active !== null) return this.terminalResult('error', 'another prompt is already in progress');
+    const cap = this.maxCostUsd;
+    if (cap !== undefined && this._cumulativeCostUsd >= cap) {
+      return this.terminalResult('cost_cap', capReachedMessage(this._cumulativeCostUsd, cap));
+    }
     const signal = opts?.signal;
-    if (signal?.aborted === true) return this.errorResult('aborted before send');
+    if (signal?.aborted === true) return this.terminalResult('error', 'aborted before send');
 
     const turn: TurnState = {
       text: '',
@@ -149,6 +120,17 @@ export class PiSession {
       }
       return;
     }
+    if (event.type === 'message_end' && event.message.role === 'assistant') {
+      const cap = this.maxCostUsd;
+      if (cap !== undefined) {
+        const after = this.inner.getUsageSnapshot();
+        if (after.cost >= cap) {
+          this.inner.abort().catch(() => {});
+          this.finishActive('cost_cap', capReachedMessage(after.cost, cap));
+        }
+      }
+      return;
+    }
     if (event.type === 'turn_end') {
       this.finishActive('completed');
       return;
@@ -161,7 +143,7 @@ export class PiSession {
     }
   }
 
-  private finishActive(finishReason: 'completed' | 'error', errorMessage?: string): void {
+  private finishActive(finishReason: TerminalReason, errorMessage?: string): void {
     const turn = this.active;
     if (turn === null) return;
     this.active = null;
@@ -177,22 +159,14 @@ export class PiSession {
       inputTokens,
       outputTokens,
     } as const;
-    if (finishReason === 'error') {
-      turn.resolve({ ...base, finishReason, errorMessage: errorMessage ?? 'unknown error' });
-    } else {
+    if (finishReason === 'completed') {
       turn.resolve({ ...base, finishReason });
+    } else {
+      turn.resolve({ ...base, finishReason, errorMessage: errorMessage ?? 'unknown error' });
     }
   }
 
-  private errorResult(msg: string): PromptResult {
-    return {
-      text: '',
-      costUsd: 0,
-      cumulativeCostUsd: this._cumulativeCostUsd,
-      inputTokens: 0,
-      outputTokens: 0,
-      finishReason: 'error',
-      errorMessage: msg,
-    };
+  private terminalResult(finishReason: 'error' | 'cost_cap', message: string): PromptResult {
+    return buildTerminalResult(finishReason, message, this._cumulativeCostUsd);
   }
 }

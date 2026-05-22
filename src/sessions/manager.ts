@@ -62,6 +62,8 @@ export class SessionManager {
     if (!path.isAbsolute(opts.cwd)) {
       throw new Error(`cwd must be an absolute path: ${JSON.stringify(opts.cwd)}`);
     }
+    // Redundant with PiSession's constructor-time validation, but kept here so
+    // callers get a fast failure before we spin up an agent dir on disk.
     if (opts.maxCostUsd !== undefined) {
       if (Number.isNaN(opts.maxCostUsd) || opts.maxCostUsd <= 0) {
         throw new Error(`maxCostUsd must be > 0: ${String(opts.maxCostUsd)}`);
@@ -80,6 +82,7 @@ export class SessionManager {
       // assign `undefined` to an optional field, we just omit it.
       ...(opts.thinkingLevel !== undefined ? { thinkingLevel: opts.thinkingLevel } : {}),
       ...(opts.systemPrompt !== undefined ? { systemPrompt: opts.systemPrompt } : {}),
+      ...(opts.maxCostUsd !== undefined ? { maxCostUsd: opts.maxCostUsd } : {}),
     };
 
     const session = await this.createSession(piOpts);

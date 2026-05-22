@@ -113,6 +113,30 @@ describe('SessionManager.create', () => {
       mgr.create({ cwd: ABS_CWD, model: 'openrouter:m/n', maxCostUsd: Number.NaN }),
     ).rejects.toThrow(/maxCostUsd/);
   });
+
+  it('passes maxCostUsd through to PiSessionOptions when provided', async () => {
+    const fakes: FakePiSession[] = [];
+    const captured: PiSessionOptions[] = [];
+    const mgr = new SessionManager({
+      sessionDir: path.resolve('/tmp/pi-mcp-test'),
+      authStorage: undefined as unknown as AuthStorage,
+      logger: silentLogger,
+      createSession: async (opts) => {
+        captured.push(opts);
+        const fake = new FakePiSession(opts);
+        fakes.push(fake);
+        return fake as unknown as PiSession;
+      },
+    });
+    await mgr.create({ cwd: ABS_CWD, model: 'openrouter:m/n', maxCostUsd: 0.5 });
+    expect(captured).toHaveLength(1);
+    expect(captured[0]?.maxCostUsd).toBe(0.5);
+
+    // And when omitted, the option is absent (not undefined-assigned).
+    await mgr.create({ cwd: ABS_CWD, model: 'openrouter:m/n' });
+    expect(captured[1]).toBeDefined();
+    expect('maxCostUsd' in (captured[1] as PiSessionOptions)).toBe(false);
+  });
 });
 
 describe('SessionManager.prompt', () => {

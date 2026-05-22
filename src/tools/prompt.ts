@@ -57,7 +57,7 @@ export function registerPromptTool(server: McpServer, sessionManager: SessionMan
     'pi_prompt',
     {
       description:
-        'Send a message to a pi session and wait for the full reply. Emits notifications/progress every 10s during execution so MCP clients don\'t time out.',
+        'Send a message to a pi session and wait for the full reply. Emits notifications/progress every 10s during execution so MCP clients don\'t time out. If the session has a max_cost_usd cap, the turn aborts mid-stream when cumulative spend reaches the cap and returns finishReason: "cost_cap" (with any partial text already streamed).',
       inputSchema,
     },
     async (args, extra) => {
@@ -88,7 +88,9 @@ export function registerPromptTool(server: McpServer, sessionManager: SessionMan
         return {
           content: [{ type: 'text', text: summarize(result) }],
           structuredContent: structured,
-          isError: result.finishReason === 'error',
+          // Any non-completed terminal state (error or cost_cap) is surfaced as
+          // isError so MCP clients can react uniformly.
+          isError: result.finishReason !== 'completed',
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

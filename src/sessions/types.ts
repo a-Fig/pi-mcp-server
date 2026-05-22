@@ -11,15 +11,27 @@ export interface PiSessionOptions {
   readonly model: string;
   readonly thinkingLevel?: ThinkingLevel;
   readonly systemPrompt?: string;
+  /**
+   * Optional per-session cost cap in USD. When cumulative spend reaches this
+   * value PiSession aborts the in-flight turn and short-circuits subsequent
+   * prompts with `finishReason: 'cost_cap'`. Must be > 0 and not NaN.
+   */
+  readonly maxCostUsd?: number;
 }
 
+/**
+ * Result of a single prompt turn.
+ *
+ * `finishReason === 'cost_cap'` means the per-session cost cap was reached;
+ * `text` may contain a partial streamed response captured before pi was aborted.
+ */
 export interface PromptResult {
   readonly text: string;
   readonly costUsd: number;
   readonly cumulativeCostUsd: number;
   readonly inputTokens: number;
   readonly outputTokens: number;
-  readonly finishReason: 'completed' | 'error';
+  readonly finishReason: 'completed' | 'error' | 'cost_cap';
   readonly errorMessage?: string;
 }
 
