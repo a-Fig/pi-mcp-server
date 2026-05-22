@@ -1,0 +1,7 @@
+dist/
+node_modules/
+.pi-mcp-test/
+*.log
+*.tsbuildinfo
+coverage/
+*.tgz
