@@ -217,25 +217,39 @@ describe('PiSession.prompt (fake inner session)', () => {
     expect(fake.disposed).toBe(true);
   });
 
-  it('returns error when tape ends with agent_end but no turn_end', async () => {
+  it('accumulates text across multiple turn_end events (multi-step tool use) and resolves on agent_end', async () => {
+    // Real pi emits one turn_end per round when the model uses tools:
+    //   turn 1 = assistant tool_call + tool result (no text)
+    //   turn 2 = assistant final text
+    //   agent_end terminates the whole agent run
+    // PiSession must resolve on agent_end with the accumulated text, not on
+    // the first turn_end.
     const fake = new FakeInnerSession();
     const session = new PiSession(baseOpts, fake);
     const empty = assistantMsg(0, 0, 0);
+    const finalMsg = assistantMsg(10, 5, 0.0001);
     fake.tape = [
       { type: 'agent_start' },
+      // Turn 1: model emits a tool call, no text.
+      { type: 'turn_start' },
+      { type: 'message_start', message: empty },
+      { type: 'message_end', message: empty },
+      { type: 'turn_end', message: empty, toolResults: [] },
+      // Turn 2: model emits the final text answer.
       { type: 'turn_start' },
       { type: 'message_start', message: empty },
       {
         type: 'message_update',
         message: empty,
-        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'partial', partial: empty },
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '0.1.0', partial: empty },
       },
+      { type: 'message_end', message: finalMsg },
+      { type: 'turn_end', message: finalMsg, toolResults: [] },
       { type: 'agent_end', messages: [] },
     ];
-    const result = await session.prompt('hi');
-    expect(result.finishReason).toBe('error');
-    expect(result.errorMessage).toMatch(/agent ended/);
-    expect(result.text).toBe('partial');
+    const result = await session.prompt('what version?');
+    expect(result.finishReason).toBe('completed');
+    expect(result.text).toBe('0.1.0');
     await session.close();
   });
 

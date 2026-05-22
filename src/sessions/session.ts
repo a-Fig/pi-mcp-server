@@ -105,10 +105,12 @@ export class PiSession {
     this.inner.dispose();
   }
 
-  // We assume pi delivers subscribe events synchronously and in order within a
-  // turn, so by the time `turn_end` fires, every `message_end` for that turn
-  // has already been observed here. If pi ever switches to async delivery this
-  // invariant would need re-checking.
+  // We assume pi delivers subscribe events synchronously and in order. A
+  // single prompt may produce MULTIPLE `turn_end` events when the model uses
+  // tools (one per tool-call round); the agent's final answer lands at
+  // `agent_end`. We therefore resolve on `agent_end`, accumulating text_deltas
+  // across all intermediate turns (tool-call deltas are filtered out by their
+  // discriminator).
   private onEvent(event: AgentSessionEvent): void {
     const turn = this.active;
     if (turn === null) return;
@@ -131,15 +133,8 @@ export class PiSession {
       }
       return;
     }
-    if (event.type === 'turn_end') {
-      this.finishActive('completed');
-      return;
-    }
     if (event.type === 'agent_end') {
-      // Terminal fallback: if turn_end already fired, this.active is null and
-      // finishActive is a no-op. Otherwise the turn ended without turn_end →
-      // surface as error so the prompt() caller never sees a fake success.
-      this.finishActive('error', 'agent ended without turn_end');
+      this.finishActive('completed');
     }
   }
 
