@@ -5,6 +5,7 @@ import { createLogger } from './log.js';
 import { buildMcpServer } from './server.js';
 import { startHttpServer } from './http.js';
 import { SessionManager } from './sessions/manager.js';
+import { installShutdownHandlers } from './shutdown.js';
 import { PACKAGE_VERSION } from './pkg.js';
 
 async function main(): Promise<void> {
@@ -26,34 +27,15 @@ async function main(): Promise<void> {
   const url = `http://${config.host}:${config.port}/mcp`;
   logger.info('pi-mcp-server listening', { url, version: PACKAGE_VERSION });
 
-  let shuttingDown = false;
-  const shutdown = (signal: NodeJS.Signals): void => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    logger.info('shutdown signal received', { signal });
-    setTimeout(() => {
-      logger.error('forceful exit after timeout');
-      process.exit(1);
-    }, 5000).unref();
-    // Close pi sessions BEFORE the HTTP server. Otherwise in-flight prompts
-    // could still try to emit progress notifications onto already-closed
-    // transports.
-    sessionManager
-      .closeAll()
-      .catch((err: unknown) => {
-        logger.error('sessionManager.closeAll error', { err: String(err) });
-      })
-      .then(() => handle.close())
-      .then(() => {
-        process.exit(0);
-      })
-      .catch((err: unknown) => {
-        logger.error('shutdown error', { err: String(err) });
-        process.exit(1);
-      });
-  };
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  installShutdownHandlers({
+    logger,
+    target: {
+      // Close pi sessions BEFORE the HTTP server. Otherwise in-flight prompts
+      // could still try to emit progress notifications onto closed transports.
+      closeSessions: () => sessionManager.closeAll(),
+      closeHttp: () => handle.close(),
+    },
+  });
 }
 
 main().catch((err: unknown) => {
