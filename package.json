@@ -1,11 +1,11 @@
 {
   "name": "@a-fig/pi-mcp-server",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "MCP server that bridges Claude Code and the pi coding agent",
   "type": "module",
   "main": "dist/index.js",
   "bin": { "pi-mcp-server": "dist/index.js" },
-  "files": ["dist"],
+  "files": ["dist", "CHANGELOG.md"],
   "engines": { "node": ">=20.6.0" },
   "scripts": {
     "build": "tsc",
@@ -27,6 +27,10 @@
     "cross-env": "^7.0.3",
     "@types/node": "^22.7.0"
   },
-  "keywords": ["mcp", "pi", "claude", "coding-agent"],
-  "license": "MIT"
+  "keywords": ["mcp", "pi", "claude", "coding-agent", "claude-code"],
+  "license": "MIT",
+  "author": "Tyler",
+  "homepage": "https://github.com/a-fig/pi-mcp-server#readme",
+  "bugs": { "url": "https://github.com/a-fig/pi-mcp-server/issues" },
+  "repository": { "type": "git", "url": "git+https://github.com/a-fig/pi-mcp-server.git" }
 }
