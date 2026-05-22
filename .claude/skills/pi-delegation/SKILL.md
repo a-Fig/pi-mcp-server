@@ -92,52 +92,43 @@ Idempotent. Close every session you create.
 
 ## Model selection
 
-Pi sees a `provider:modelId` string. Use the OpenRouter route when one key
-covers everything; use the direct provider when its API has materially
-better limits.
+Pi sees a `provider:modelId` string. All models below route via OpenRouter
+(`openrouter:<id>`) — one key, one billing surface. The user has explicitly
+opted out of going through model-direct APIs from pi.
 
-The recommendations below are based on pi 0.74.1's bundled
-`models.generated.js`. Pricing drifts — verify before relying on a
-specific number for billing.
+Pricing, context, and release dates below were pulled live from each
+model's OpenRouter page on 2026-05-22 (the headline values shown at the
+top of `https://openrouter.ai/<id>`). Provider tables on OpenRouter are
+JavaScript-rendered and can't be scraped programmatically — when you need
+to know which physical backend will serve a request (or its max output
+cap), open the page's "Providers" tab manually. Pricing drifts; treat
+these as current-as-of date, not forever-truth.
 
-### Tested with pi-mcp-server
+Hy3 preview is the one model we've actually exercised end-to-end through
+pi-mcp-server (`scripts/use-it.ts` — file read + directory enumeration
+via pi's tools). The rest are listed but not behavior-tested by us; run
+`scripts/use-it.ts` with `DEMO_MODEL=<id>` to verify tool-use behaviour
+before relying on any of them.
 
-End-to-end verified via `scripts/use-it.ts` (real file read + directory
-enumeration through pi's tools):
-
-| Model | provider:modelId | In / Out ($/M) | Context | Max out | Notes |
+| Model | provider:modelId | In / Out ($/M) | Context | Released | Notes |
 |---|---|---|---|---|---|
-| **Tencent Hy3 preview** | `openrouter:tencent/hy3-preview` | 0.066 / 0.26 | 262K | 262K | **Recommended default.** Cheapest tested model. Reasoning. Tool use confirmed. Two real verification tasks cost ~$0.001 total. |
-
-### Other models (in pi's registry, untested by us)
-
-Pricing pulled from pi 0.74.1's registry; reasoning capability noted where
-present.
-
-| Model | provider:modelId | In / Out ($/M) | Context | Max out | Notes |
-|---|---|---|---|---|---|
-| DeepSeek V4 Flash (direct) | `deepseek:deepseek-v4-flash` | 0.14 / 0.28 | 1M | 384K | Cheap, fast, reasoning. **Use this not the OpenRouter route** — OpenRouter's variant caps output at 4,096 tokens which clips most code-gen. Direct API requires `DEEPSEEK_API_KEY`. |
-| DeepSeek V4 Flash (OpenRouter) | `openrouter:deepseek/deepseek-v4-flash` | 0.112 / 0.224 | 1M | **4,096** | 20% cheaper than direct, but the 4K output cap kills it for real work. Only use when you genuinely only need short answers and don't have a DeepSeek key. |
-| DeepSeek V4 Pro | `openrouter:deepseek/deepseek-v4-pro` or `deepseek:deepseek-v4-pro` | 0.435 / 0.87 | 1M | 384K | DeepSeek's flagship reasoner. Use for hard problems where Flash isn't enough. |
-| Moonshot Kimi K2.6 | `openrouter:moonshotai/kimi-k2.6` | 0.73 / 3.49 | 262K | 262K | Frontier reasoner, accepts text + image inputs. Output-cost-heavy — be careful with chatty prompts. |
-| Alibaba Qwen 3.6 35B A3B | `openrouter:qwen/qwen3.6-35b-a3b` | 0.15 / 1.00 | 262K | 262K | Sparse MoE (~3B active per token, open weights under Apache 2.0). Toggleable thinking mode, multimodal (text + image). Cheapest reasoning-capable Qwen in pi's registry — pick this over 3.6 Plus when cost matters more than the 1M context window. |
-| Alibaba Qwen 3.6 Plus | `openrouter:qwen/qwen3.6-plus` | 0.325 / 1.95 | 1M | 65K | Dense flagship reasoner, multimodal. Pay the ~2× premium over 35B A3B when you actually need the 1M context or denser reasoning depth. |
-| Alibaba Qwen 3.7 Max | `openrouter:qwen/qwen3.7-max` | 2.50 / 7.50 | 1M | 65K | **Preview model — pricing and behavior subject to change.** Alibaba positions it for long-horizon agent runs. Distinct tier from 3.6 Plus, not a replacement; 3.6 Plus is the stable production tier. |
-| Xiaomi MiMo-V2.5-Pro | `openrouter:xiaomi/mimo-v2.5-pro` | 1 / 3 | 1M | **16K** | Agentic-focused, open-source heritage. The 16K output cap is restrictive for multi-file refactors or long diffs — pick something with more headroom if you expect a big response. |
+| **Tencent Hy3 preview** | `openrouter:tencent/hy3-preview` | 0.066 / 0.26 | 262K | Apr 22, 2026 | High-efficiency Tencent MoE for agentic workflows. Configurable reasoning levels (off / low / high). **Only model we've tested through pi-mcp-server.** Cheapest in the table. Two real verification tasks cost ~$0.001 total. |
+| DeepSeek V4 Flash | `openrouter:deepseek/deepseek-v4-flash` | 0.10 / 0.20 | 1M | Apr 24, 2026 | Efficiency-optimised MoE, 284B total / 13B active. Page says "designed for fast inference and high-throughput workloads, while maintaining strong reasoning and coding performance". Pi's local registry caches a different price ($0.112/$0.224); the headline OpenRouter page wins. |
+| DeepSeek V4 Pro | `openrouter:deepseek/deepseek-v4-pro` | 0.435 / 0.87 | 1M | Apr 24, 2026 | DeepSeek flagship MoE, 1.6T total / 49B active. Page positions it for advanced reasoning, coding, and long-horizon agent workflows. ~4× the cost of V4 Flash. |
+| Moonshot Kimi K2.6 | `openrouter:moonshotai/kimi-k2.6` | 0.73 / 3.49 | 262K | Apr 20, 2026 | Multimodal. Page positions it for long-horizon coding, UI/UX generation, and multi-agent orchestration. Output token cost is ~5× input — watch chatty prompts. |
+| Alibaba Qwen 3.6 35B A3B | `openrouter:qwen/qwen3.6-35b-a3b` | 0.15 / 1.00 | 262K | Apr 27, 2026 | Open-weight MoE, 35B total / 3B active per token. Hybrid sparse architecture with Gated DeltaNet attention. **Multimodal: text, image, AND video input.** Cheapest reasoning-capable Qwen here — pick it over 3.6 Plus when cost beats needing the 1M context. |
+| Alibaba Qwen 3.6 Plus | `openrouter:qwen/qwen3.6-plus` | 0.325 / 1.95 | 1M | Apr 2, 2026 | Hybrid linear attention + sparse MoE. **Page currently shows a 35% promo discount on this pricing — list price may revert without notice.** Pay the ~2× over 35B A3B for the 1M context window. |
+| Alibaba Qwen 3.7 Max | `openrouter:qwen/qwen3.7-max` | 2.50 / 7.50 | 1M | May 21, 2026 | **Brand-new — released yesterday.** Flagship Qwen3.7 series; text-only. Page describes "agent-centric workloads, with particular strengths in coding, office and productivity tasks, and long-horizon autonomous execution". Treat behaviour and pricing as preview-stage. |
+| Xiaomi MiMo-V2.5-Pro | `openrouter:xiaomi/mimo-v2.5-pro` | 1.00 / 3.00 | 1M | Apr 22, 2026 | Xiaomi flagship. Page advertises top rankings on ClawEval, GDPVal, and SWE-bench Pro (no numeric scores rendered on the page itself). Targets general agentic capabilities and long-horizon software-engineering tasks. |
 
 ### Picking a model
 
-1. **Cheap and proven**: `openrouter:tencent/hy3-preview` — until you've tested others against pi.
-2. **Cheaper still, more output budget**: `deepseek:deepseek-v4-flash` (direct API) if `DEEPSEEK_API_KEY` is set.
-3. **Open-weights / locally-runnable alternative**: `openrouter:qwen/qwen3.6-35b-a3b` — sparse MoE (~3B active), Apache 2.0 license, cheap inference.
-4. **Harder reasoning**: `deepseek:deepseek-v4-pro` or `openrouter:moonshotai/kimi-k2.6`.
-5. **Long-horizon agentic preview**: `openrouter:qwen/qwen3.7-max` — but note "preview" and budget accordingly.
+1. **Cheap and tested**: `openrouter:tencent/hy3-preview` — until you've run `use-it.ts` against the others.
+2. **Cheapest reasoning model in the table**: same as above ($0.066/$0.26). For a non-Tencent alternative at similar tier: `openrouter:deepseek/deepseek-v4-flash` ($0.10/$0.20, 1M context).
+3. **Open-weights / locally-runnable alternative**: `openrouter:qwen/qwen3.6-35b-a3b` — sparse MoE (~3B active), open weights, multimodal including video.
+4. **Harder reasoning**: `openrouter:deepseek/deepseek-v4-pro` or `openrouter:moonshotai/kimi-k2.6`.
+5. **Long-horizon agentic preview**: `openrouter:qwen/qwen3.7-max` — released yesterday; treat as preview, budget accordingly.
 6. **Anthropic models**: use Claude Code's native Task tool / subagents, not pi.
-
-Caveat for every "untested by us" row: the model is in pi's registry so it
-will resolve, but we haven't verified that it cleanly drives pi's `read` /
-`bash` tools end-to-end. Run `scripts/use-it.ts` with `DEMO_MODEL=<id>` to
-verify before relying on a model for tool-heavy delegation.
 
 ### Suggested `max_cost_usd` starting points
 
@@ -187,9 +178,15 @@ diff the lines. Don't act on pi's word alone for anything load-bearing.
   `system_prompt` that forbids edits.
 - **Model identifiers** must be exactly `provider:modelId`. Wrong format →
   pi rejects the session with "Model not found".
-- **`maxTokens` cap matters.** Some models in the table (DeepSeek V4 Flash
-  via OpenRouter at 4K; MiMo-V2.5-Pro at 16K) cap output well below their
-  context window. If pi's reply gets truncated, suspect the output cap.
+- **Max output varies per OpenRouter provider, not per model.** OpenRouter
+  routes a single model id (e.g. `deepseek/deepseek-v4-flash`) to one of
+  several physical backends (DeepInfra, GMICloud, Baidu, SiliconFlow,
+  Parasail, AtlasCloud, etc.) — and they advertise wildly different output
+  caps. For V4 Flash alone: 16.4K on DeepInfra, 131K on Baidu, 393K on
+  SiliconFlow/AtlasCloud, 1.05M on GMICloud/Parasail. If pi's reply gets
+  truncated, suspect that the routed provider has a tighter cap than you
+  expected. Open the model's "Providers" tab on OpenRouter to see the
+  spread and constrain routing if needed.
 - **Heartbeat ≠ streaming.** Pi doesn't stream the answer to the MCP
   client; the 10s heartbeat just prevents a tool-call timeout. The full
   reply lands at the end of the turn.
