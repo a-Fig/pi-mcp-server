@@ -1,0 +1,32 @@
+{
+  "name": "@a-fig/pi-mcp-server",
+  "version": "0.0.0",
+  "description": "MCP server that bridges Claude Code and the pi coding agent",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": { "pi-mcp-server": "dist/index.js" },
+  "files": ["dist"],
+  "engines": { "node": ">=20.6.0" },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:live": "cross-env OPENROUTER_LIVE=1 vitest run tests/integration",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@earendil-works/pi-coding-agent": "0.74.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "tsx": "^4.19.0",
+    "vitest": "^2.1.0",
+    "cross-env": "^7.0.3",
+    "@types/node": "^22.7.0"
+  },
+  "keywords": ["mcp", "pi", "claude", "coding-agent"],
+  "license": "MIT"
+}
