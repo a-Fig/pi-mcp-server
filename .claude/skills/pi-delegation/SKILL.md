@@ -51,8 +51,6 @@ Bad fits — do the work yourself or use a native subagent:
 - **Reasoning the user is actively watching**: pi runs detached; the 10s
   heartbeat keeps the connection alive but doesn't stream thoughts in
   real time.
-- **Tiny one-off questions**: spinning up a pi session costs ~$0.001
-  in agent overhead. Not worth it for trivia.
 - **Anything cost-sensitive without a cap**: if you can't reason about
   the cost ceiling, don't delegate.
 
