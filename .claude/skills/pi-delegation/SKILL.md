@@ -5,8 +5,8 @@ description: |
   agent, @earendil-works/pi-coding-agent, or any of the pi_new_session /
   pi_prompt / pi_list_sessions / pi_close_session MCP tools. It covers when
   to delegate work to pi, the 4-tool surface, model selection (DeepSeek V4
-  Flash / Pro, Hy3 preview, Kimi K2.6, Qwen 3.6 Plus, Qwen 3.7 Max,
-  MiMo-V2.5-Pro), cost caps, and common patterns. Skip for unrelated coding
+  Flash / Pro, Hy3 preview, Kimi K2.6, Qwen 3.6 Plus, Qwen 3.6 35B A3B,
+  Qwen 3.7 Max, MiMo-V2.5-Pro), cost caps, and common patterns. Skip for unrelated coding
   tasks — pi delegation is niche and only useful when Claude Code's
   sandboxed environment is the bottleneck. context_cost: small ~800 words |
   skill_type: process
@@ -120,7 +120,8 @@ present.
 | DeepSeek V4 Flash (OpenRouter) | `openrouter:deepseek/deepseek-v4-flash` | 0.112 / 0.224 | 1M | **4,096** | 20% cheaper than direct, but the 4K output cap kills it for real work. Only use when you genuinely only need short answers and don't have a DeepSeek key. |
 | DeepSeek V4 Pro | `openrouter:deepseek/deepseek-v4-pro` or `deepseek:deepseek-v4-pro` | 0.435 / 0.87 | 1M | 384K | DeepSeek's flagship reasoner. Use for hard problems where Flash isn't enough. |
 | Moonshot Kimi K2.6 | `openrouter:moonshotai/kimi-k2.6` | 0.73 / 3.49 | 262K | 262K | Frontier reasoner, accepts text + image inputs. Output-cost-heavy — be careful with chatty prompts. |
-| Alibaba Qwen 3.6 Plus | `openrouter:qwen/qwen3.6-plus` | 0.325 / 1.95 | 1M | 65K | Mid-tier reasoner, multimodal (text + image). Solid price-to-context ratio. |
+| Alibaba Qwen 3.6 35B A3B | `openrouter:qwen/qwen3.6-35b-a3b` | 0.15 / 1.00 | 262K | 262K | Sparse MoE (~3B active per token, open weights under Apache 2.0). Toggleable thinking mode, multimodal (text + image). Cheapest reasoning-capable Qwen in pi's registry — pick this over 3.6 Plus when cost matters more than the 1M context window. |
+| Alibaba Qwen 3.6 Plus | `openrouter:qwen/qwen3.6-plus` | 0.325 / 1.95 | 1M | 65K | Dense flagship reasoner, multimodal. Pay the ~2× premium over 35B A3B when you actually need the 1M context or denser reasoning depth. |
 | Alibaba Qwen 3.7 Max | `openrouter:qwen/qwen3.7-max` | 2.50 / 7.50 | 1M | 65K | **Preview model — pricing and behavior subject to change.** Alibaba positions it for long-horizon agent runs. Distinct tier from 3.6 Plus, not a replacement; 3.6 Plus is the stable production tier. |
 | Xiaomi MiMo-V2.5-Pro | `openrouter:xiaomi/mimo-v2.5-pro` | 1 / 3 | 1M | **16K** | Agentic-focused, open-source heritage. The 16K output cap is restrictive for multi-file refactors or long diffs — pick something with more headroom if you expect a big response. |
 
@@ -128,9 +129,10 @@ present.
 
 1. **Cheap and proven**: `openrouter:tencent/hy3-preview` — until you've tested others against pi.
 2. **Cheaper still, more output budget**: `deepseek:deepseek-v4-flash` (direct API) if `DEEPSEEK_API_KEY` is set.
-3. **Harder reasoning**: `deepseek:deepseek-v4-pro` or `openrouter:moonshotai/kimi-k2.6`.
-4. **Long-horizon agentic preview**: `openrouter:qwen/qwen3.7-max` — but note "preview" and budget accordingly.
-5. **Anthropic models**: use Claude Code's native Task tool / subagents, not pi.
+3. **Open-weights / locally-runnable alternative**: `openrouter:qwen/qwen3.6-35b-a3b` — sparse MoE (~3B active), Apache 2.0 license, cheap inference.
+4. **Harder reasoning**: `deepseek:deepseek-v4-pro` or `openrouter:moonshotai/kimi-k2.6`.
+5. **Long-horizon agentic preview**: `openrouter:qwen/qwen3.7-max` — but note "preview" and budget accordingly.
+6. **Anthropic models**: use Claude Code's native Task tool / subagents, not pi.
 
 Caveat for every "untested by us" row: the model is in pi's registry so it
 will resolve, but we haven't verified that it cleanly drives pi's `read` /
